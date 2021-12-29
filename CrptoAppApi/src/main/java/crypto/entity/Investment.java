@@ -9,7 +9,6 @@ public class Investment {
     private String cryptoName;
     private BigDecimal investedAmount;
     private BigDecimal shares;
-    private BigDecimal cryptoRate;
 
     public int getInvestmentId() {
         return investmentId;
@@ -51,24 +50,16 @@ public class Investment {
         this.shares = shares;
     }
 
-    public BigDecimal getCryptoRate() {
-        return cryptoRate;
-    }
-
-    public void setCryptoRate(BigDecimal cryptoRate) {
-        this.cryptoRate = cryptoRate;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Investment that = (Investment) o;
-        return investmentId == that.investmentId && portfolioId == that.portfolioId && Objects.equals(cryptoName, that.cryptoName) && Objects.equals(investedAmount, that.investedAmount) && Objects.equals(shares, that.shares) && Objects.equals(cryptoRate, that.cryptoRate);
+        return investmentId == that.investmentId && portfolioId == that.portfolioId && Objects.equals(cryptoName, that.cryptoName) && Objects.equals(investedAmount, that.investedAmount) && Objects.equals(shares, that.shares);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(investmentId, portfolioId, cryptoName, investedAmount, shares, cryptoRate);
+        return Objects.hash(investmentId, portfolioId, cryptoName, investedAmount, shares);
     }
 }

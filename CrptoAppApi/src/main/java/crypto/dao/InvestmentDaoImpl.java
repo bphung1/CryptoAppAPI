@@ -24,7 +24,6 @@ public class InvestmentDaoImpl implements InvestmentDao{
             investments.setCryptoName(resultSet.getString("cryptoName"));
             investments.setInvestedAmount(resultSet.getBigDecimal("investedAmount"));
             investments.setShares(resultSet.getBigDecimal("shares"));
-            investments.setCryptoRate(resultSet.getBigDecimal("cryptoRate"));
             return investments;
         }
     }
@@ -35,15 +34,14 @@ public class InvestmentDaoImpl implements InvestmentDao{
         return jdbcTemplate.query(SELECT_Investment, new investmentMapper(),portfolioId);
     }
 
-
     @Override
     @Transactional
     public Investment addInvestment(int portfolioId, Investment investment) throws DataAccessException {
-        final String INSERT_NEW_INVESTMENT="INSERT INTO Investment(portfolioId,cryptoName,investedAmount,shares,cryptoRate)" +
-                "values (?,?,?,?,?);";
+        final String INSERT_NEW_INVESTMENT="INSERT INTO Investment(portfolioId, cryptoName, investedAmount, shares)" +
+                "values (?,?,?,?);";
         jdbcTemplate.update(INSERT_NEW_INVESTMENT,portfolioId,
-                investment.getCryptoName(),investment.getInvestedAmount(),investment.getShares(),investment.getCryptoRate());
-        int newId=jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID();", Integer.class);
+                investment.getCryptoName(),investment.getInvestedAmount(),investment.getShares());
+        int newId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID();", Integer.class);
         investment.setInvestmentId(newId);
         return investment;
     }
@@ -52,6 +50,15 @@ public class InvestmentDaoImpl implements InvestmentDao{
     public Investment deleteInvestment(Investment investment) throws DataAccessException {
         final String DELETE_INVESTMENT = "DELETE FROM Investment WHERE investmentId = ?;";
         jdbcTemplate.update(DELETE_INVESTMENT,investment.getInvestmentId());
+        return investment;
+    }
+
+    @Override
+    public Investment updateInvestment(Investment investment) {
+        final String UPDATE_INVESTMENT = "UPDATE Investment SET investedAmount = ?, shares = ? where investmentId = ?;";
+//        final String UPDATE_INVESTMENT = "UPDATE Investment SET shares = ? WHERE investmentId = ?;";
+        jdbcTemplate.update(UPDATE_INVESTMENT, investment.getInvestedAmount(),investment.getShares(),investment.getInvestmentId());
+//        jdbcTemplate.update(UPDATE_INVESTMENT, investment.getShares(), investment.getInvestmentId());
         return investment;
     }
 

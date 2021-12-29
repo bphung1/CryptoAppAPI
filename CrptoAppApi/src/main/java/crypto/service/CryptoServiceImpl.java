@@ -4,14 +4,13 @@ import crypto.dao.InvestmentDao;
 import crypto.dao.PortfolioDao;
 import crypto.dao.TransactionDao;
 import crypto.dao.UsersDao;
-import crypto.dto.Crypto;
+import crypto.dto.CoinMarkets;
 import crypto.entity.Investment;
 import crypto.entity.Portfolio;
 import crypto.entity.Transaction;
 import crypto.entity.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -21,8 +20,10 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 @Repository
 public class CryptoServiceImpl implements CryptoService{
@@ -118,38 +119,138 @@ public class CryptoServiceImpl implements CryptoService{
     }
 
     @Override
-    public Transaction addTransaction(int portfolioId,Transaction transaction) {
-       try {
-           Portfolio portfolio = portfolioDao.getPortfolioById(portfolioId);
-           if(portfolio.getNonInvestedBalance().compareTo(transaction.getTransactionAmount()) >= 0 &&
+    public Transaction transactionForBuy(int portfolioId, Transaction transaction) {
+        try {
+            Portfolio portfolio = portfolioDao.getPortfolioById(portfolioId);
+            if(portfolio.getNonInvestedBalance().compareTo(transaction.getTransactionAmount()) >= 0 &&
                 transaction.getTransactionAmount().compareTo(BigDecimal.valueOf(0)) > 0
-           ) {
-               transaction.setPortfolioId(portfolioId);
-               transaction.setTimestamp(LocalDateTime.now());
-               Crypto crypt = rateForCrypto(transaction.getCryptoName());
+            ) {
+                CoinMarkets crypt = getCrypto(transaction.getCryptoName());
+                BigDecimal convertBalanceToShare = transaction.getTransactionAmount()
+                    .divide(crypt.getCurrent_price(), 8, RoundingMode.HALF_DOWN);
 
-               BigDecimal convertBalanceToShare = transaction.getTransactionAmount()
-                       .divide(crypt.getRate(), 8, RoundingMode.HALF_DOWN);
+                Investment investment = createInvestment(portfolioId, convertBalanceToShare, transaction, crypt);
+                investmentDao.addInvestment(portfolioId,investment);
 
-              Investment investment=new Investment();
-              investment.setPortfolioId(portfolioId);
-              investment.setShares(convertBalanceToShare);
-              investment.setCryptoName(transaction.getCryptoName());
-              investment.setCryptoRate(crypt.getRate().setScale(8,RoundingMode.HALF_DOWN));
-              investment.setInvestedAmount(transaction.getTransactionAmount());
-              investmentDao.addInvestment(portfolioId,investment);
+                Transaction completeTransaction = autoGenerateValuesForTransaction(transaction, portfolioId, convertBalanceToShare, crypt);
+                transactionDao.addTransaction(completeTransaction);
+                updatePortfolio(transaction, portfolio);
+                return transaction;
+            }
+            return null;
+        }catch (DataAccessException | NullPointerException ex ){
+            return null;
+        }
+    }
 
+    @Override
+    public List<CoinMarkets> rateForCrypto() {
+        String[] cryptoNames = {"bitcoin", "dogecoin", "ethereum", "litecoin", "cardano"};
+//        String[] cryptoNames = {"dogecoin"};
 
-               transaction.setShares(convertBalanceToShare);
-               transaction.setCryptoRate(crypt.getRate().setScale(8, RoundingMode.HALF_DOWN));
-               transactionDao.addTransaction(transaction);
-               updatePortfolio(transaction, portfolio);
-               return transaction;
-           }
-           return null;
-       }catch (DataAccessException | NullPointerException ex ){
-           return null;
-       }
+        List<CoinMarkets> coinMarkets = new ArrayList<>();
+
+        for (String name : cryptoNames) {
+            coinMarkets.add(getCrypto(name));
+        }
+
+        return coinMarkets;
+    }
+
+    @Override
+    public Transaction transactionForSell(int portfolioId, Transaction userInputTransaction) {
+        BigDecimal remainingUserInputShares = userInputTransaction.getShares();
+        try {
+            List<Investment> allActiveInvestments = investmentDao.getAllInvestments(portfolioId);
+            List<Investment> filteredInv = filterInvestments(allActiveInvestments, userInputTransaction.getCryptoName());
+
+            if (userInputTransaction.getShares().compareTo(getTotalShares(filteredInv)) <= 0 &&
+                    userInputTransaction.getShares().compareTo(new BigDecimal("0.00")) > 0
+            ) {
+                CoinMarkets selectedCrypto = getCrypto(userInputTransaction.getCryptoName());
+                Transaction newTransaction = autoGenerateValuesForTransaction(userInputTransaction, portfolioId,
+                        userInputTransaction.getShares(), selectedCrypto);
+
+                BigDecimal convertToAmount = selectedCrypto.getCurrent_price().multiply(userInputTransaction.getShares());
+                newTransaction.setTransactionAmount(convertToAmount);
+
+                transactionDao.addTransaction(newTransaction);
+
+                Portfolio portfolio = portfolioDao.getPortfolio(portfolioId);
+                portfolio.setNonInvestedBalance(portfolio.getNonInvestedBalance().add(convertToAmount));
+                portfolio.setInvestedTotalBalance(portfolio.getInvestedTotalBalance().subtract(convertToAmount));
+                portfolioDao.updatePortfolioBalance(portfolio);
+
+                for (Investment inv : filteredInv) {
+                    if (inv.getShares().compareTo(remainingUserInputShares) <= 0) {
+                        remainingUserInputShares = remainingUserInputShares.subtract(inv.getShares());
+                        investmentDao.deleteInvestment(inv);
+                    } else if (inv.getShares().compareTo(remainingUserInputShares) > 0){
+                        inv.setShares(inv.getShares().subtract(remainingUserInputShares));
+                        inv.setInvestedAmount(selectedCrypto.getCurrent_price().multiply(inv.getShares()));
+                        remainingUserInputShares = remainingUserInputShares.subtract(remainingUserInputShares);
+                        investmentDao.updateInvestment(inv);
+                        break;
+                    }
+                }
+            } else {
+                return null;
+            }
+            return userInputTransaction;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<Investment> filterInvestments(List<Investment> investments, String cryptoName) {
+        return investments.stream().filter((p)-> p.getCryptoName()
+                        .equalsIgnoreCase(cryptoName))
+                .collect(Collectors.toList());
+    }
+
+    private BigDecimal getTotalShares(List<Investment> investments) {
+        BigDecimal total = new BigDecimal(0.00);
+        for (Investment inv : investments) {
+            total = total.add(inv.getShares());
+        }
+        return total;
+    }
+
+    private CoinMarkets getCrypto(String symbol) {
+        String url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=" +
+                symbol + "&order=market_cap_desc&per_page=100&page=1&sparkline=false";
+
+        WebClient webClient = WebClient.builder()
+                .baseUrl(url)
+                .build();
+
+        CoinMarkets response = webClient.get()
+                .retrieve()
+                .bodyToFlux(CoinMarkets.class)
+                .blockLast();
+
+        return response;
+    }
+
+    private Transaction autoGenerateValuesForTransaction(Transaction transaction, int portfolioId,
+                                                         BigDecimal convertBalanceToShare, CoinMarkets crypt) {
+        transaction.setPortfolioId(portfolioId);
+        transaction.setTimestamp(LocalDateTime.now());
+        transaction.setShares(convertBalanceToShare);
+        transaction.setCryptoRate(crypt.getCurrent_price().setScale(8, RoundingMode.HALF_DOWN));
+
+        return transaction;
+    }
+
+    private Investment createInvestment(int portfolioId, BigDecimal convertBalanceToShare,
+                                        Transaction transaction, CoinMarkets crypt) {
+        Investment investment = new Investment();
+        investment.setPortfolioId(portfolioId);
+        investment.setShares(convertBalanceToShare);
+        investment.setCryptoName(transaction.getCryptoName());
+        investment.setInvestedAmount(transaction.getTransactionAmount());
+
+        return investment;
     }
 
     private Portfolio updatePortfolio(Transaction transaction, Portfolio portfolio) {
@@ -161,23 +262,7 @@ public class CryptoServiceImpl implements CryptoService{
         return portfolio;
     }
 
-    private Crypto rateForCrypto(String symbol) {
-        String url = "https://rest.coinapi.io/v1/exchangerate/" + symbol + "/USD";
-        String[] apiKeyAndValue = externalAPIKey();
-
-        WebClient webClient = WebClient.builder()
-                .baseUrl(url)
-                .defaultHeader(apiKeyAndValue[0], apiKeyAndValue[1])
-                .build();
-
-        Crypto response = webClient.get()
-                .retrieve()
-                .bodyToMono(Crypto.class)
-                .block();
-
-        return response;
-    }
-
+    //keep in case we need to change external API
     private String[] externalAPIKey() {
         try {
             InputStream input = new FileInputStream("src/main/resources/externalAPI.properties");
