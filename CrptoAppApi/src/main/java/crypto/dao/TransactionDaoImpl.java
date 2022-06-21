@@ -1,6 +1,6 @@
 package crypto.dao;
 
-import com.mysql.cj.xdevapi.Row;
+//import com.mysql.cj.xdevapi.Row;
 import crypto.entity.Transaction;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,9 +23,9 @@ public class TransactionDaoImpl implements TransactionDao {
     @Transactional
     public Transaction addTransaction(Transaction transaction) {
         final String INSERT_TRANSACTION = "INSERT INTO Transaction(portfolioId, timestamp, transactionAmount, " +
-                                            "cryptoName, transactionType, shares, cryptoRate) VALUES (?,?,?,?,?,?,?);";
+                                            "cryptoName, transactionType, shares, cryptoRate) VALUES (?,?,?,?,?,?,?) RETURNING transactionId;";
 
-        jdbc.update(INSERT_TRANSACTION,
+        int newId = jdbc.queryForObject(INSERT_TRANSACTION, Integer.class,
                 transaction.getPortfolioId(),
                 Timestamp.valueOf(transaction.getTimestamp()),
                 transaction.getTransactionAmount(),
@@ -35,7 +35,7 @@ public class TransactionDaoImpl implements TransactionDao {
                 transaction.getCryptoRate()
         );
 
-        int newId = jdbc.queryForObject("SELECT LAST_INSERT_ID();", Integer.class);
+//        int newId = jdbc.queryForObject("SELECT LAST_INSERT_ID();", Integer.class);
         transaction.setTransactionId(newId);
 
         return transaction;

@@ -19,15 +19,15 @@ public class UsersDaoImpl implements UsersDao{
     @Override
     @Transactional
     public User createUsers(User user) throws DataAccessException {
-        final String INSERT_NEW_USER = "INSERT INTO User(username, password, email) VALUES (?, ?, ?);";
+        final String INSERT_NEW_USER = "INSERT INTO Users(username, password, email) VALUES (?, ?, ?) RETURNING userId;";
 
-        jdbc.update(INSERT_NEW_USER,
+        int newId = jdbc.queryForObject(INSERT_NEW_USER, Integer.class,
                 user.getUsername(),
                 user.getPassword(),
                 user.getEmail()
         );
 
-        int newId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Integer.class);
+//        int newId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Integer.class);
         user.setUserid(newId);
 
         return user;
@@ -35,14 +35,14 @@ public class UsersDaoImpl implements UsersDao{
 
     @Override
     public User getUsers(String username, String password) throws DataAccessException {
-        final String SELECT_BY_USER_AND_PASSWORD = "SELECT * FROM User WHERE username = ? AND password = ?;";
+        final String SELECT_BY_USER_AND_PASSWORD = "SELECT * FROM Users WHERE username = ? AND password = ?;";
         User user = jdbc.queryForObject(SELECT_BY_USER_AND_PASSWORD, new UserMapper(), username, password);
         return user;
     }
 
     @Override
     public User getUserByUsername(String username) throws DataAccessException {
-        final String GET_USER_BY_USERNAME = "SELECT * FROM User WHERE username = ?";
+        final String GET_USER_BY_USERNAME = "SELECT * FROM Users WHERE username = ?";
         User user = jdbc.queryForObject(GET_USER_BY_USERNAME, new UserMapper(), username);
         return user;
     }
@@ -53,7 +53,7 @@ public class UsersDaoImpl implements UsersDao{
         final String DELETE_INVESTMENT_BY_PORTFOLIO = "DELETE FROM Investment WHERE portfolioId = ?;";
         final String DELETE_TRANSACTION_BY_PORTFOLIO = "DELETE FROM Transaction WHERE portfolioId = ?;";
         final String DELETE_PORTFOLIO = "DELETE FROM Portfolio WHERE userId = ?;";
-        final String DELETE_USER = "DELETE FROM User WHERE userid = ?;";
+        final String DELETE_USER = "DELETE FROM Users WHERE userid = ?;";
 
         jdbc.update(DELETE_INVESTMENT_BY_PORTFOLIO, portfolioId);
         jdbc.update(DELETE_TRANSACTION_BY_PORTFOLIO, portfolioId);
@@ -65,7 +65,7 @@ public class UsersDaoImpl implements UsersDao{
 
     @Override
     public User updateUser(User user) throws DataAccessException {
-        final String UPDATE_USER = "UPDATE User SET password = ? WHERE userId = ?";
+        final String UPDATE_USER = "UPDATE Users SET password = ? WHERE userId = ?";
         jdbc.update(UPDATE_USER, user.getPassword(), user.getUserid());
         return user;
     }

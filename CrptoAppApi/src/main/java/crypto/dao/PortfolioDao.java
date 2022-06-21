@@ -6,7 +6,8 @@ import java.util.List;
 
 public interface PortfolioDao {
     Portfolio createPortfolio(Portfolio portfolio);
-    Portfolio getPortfolio (int userId);
+    Portfolio getPortfolioByUserId(int userId);
+    Portfolio getPortfolioByPortfolioId(int userId);
     Portfolio updatePortfolioBalance(Portfolio portfolio);
     Portfolio getPortfolioById(int portfolioId);
 

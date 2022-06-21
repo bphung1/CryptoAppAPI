@@ -38,10 +38,10 @@ public class InvestmentDaoImpl implements InvestmentDao{
     @Transactional
     public Investment addInvestment(int portfolioId, Investment investment) throws DataAccessException {
         final String INSERT_NEW_INVESTMENT="INSERT INTO Investment(portfolioId, cryptoName, investedAmount, shares)" +
-                "values (?,?,?,?);";
-        jdbcTemplate.update(INSERT_NEW_INVESTMENT,portfolioId,
-                investment.getCryptoName(),investment.getInvestedAmount(),investment.getShares());
-        int newId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID();", Integer.class);
+                "values (?,?,?,?) RETURNING investmentId;";
+        int newId = jdbcTemplate.queryForObject(INSERT_NEW_INVESTMENT,Integer.class, portfolioId,
+                investment.getCryptoName(), investment.getInvestedAmount(), investment.getShares());
+//        int newId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID();", Integer.class);
         investment.setInvestmentId(newId);
         return investment;
     }

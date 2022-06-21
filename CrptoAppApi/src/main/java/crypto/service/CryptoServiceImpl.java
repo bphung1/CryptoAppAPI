@@ -65,7 +65,7 @@ public class CryptoServiceImpl implements CryptoService{
 
     @Override
     public Portfolio inputNonInvestedBalance(int userId, double deposit) {
-       Portfolio user = portfolioDao.getPortfolio(userId);
+       Portfolio user = portfolioDao.getPortfolioByUserId(userId);
        BigDecimal currentBal = user.getNonInvestedBalance();
         if(deposit > 0){
             BigDecimal update = currentBal.add(BigDecimal.valueOf(deposit));
@@ -76,7 +76,7 @@ public class CryptoServiceImpl implements CryptoService{
 
     @Override
     public Portfolio withdrawFromNonInvBal(int userId, double amount) {
-        Portfolio user = portfolioDao.getPortfolio(userId);
+        Portfolio user = portfolioDao.getPortfolioByUserId(userId);
         BigDecimal currentBal = user.getNonInvestedBalance();
         if(amount > 0 && currentBal.compareTo(BigDecimal.valueOf(amount)) >= 0){
 
@@ -91,7 +91,7 @@ public class CryptoServiceImpl implements CryptoService{
     @Override
     public Portfolio getPortfolio(int userId) {
         try {
-            return portfolioDao.getPortfolio(userId);
+            return portfolioDao.getPortfolioByUserId(userId);
         } catch (DataAccessException e) {
             return null;
         }
@@ -160,6 +160,7 @@ public class CryptoServiceImpl implements CryptoService{
     @Override
     public Transaction transactionForSell(int portfolioId, Transaction userInputTransaction) {
         BigDecimal remainingUserInputShares = userInputTransaction.getShares();
+        userInputTransaction.setPortfolioId(portfolioId);
         try {
             List<Investment> allActiveInvestments = investmentDao.getAllInvestments(portfolioId);
             List<Investment> filteredInv = filterInvestments(allActiveInvestments, userInputTransaction.getCryptoName());
@@ -176,7 +177,7 @@ public class CryptoServiceImpl implements CryptoService{
 
                 transactionDao.addTransaction(newTransaction);
 
-                Portfolio portfolio = portfolioDao.getPortfolio(portfolioId);
+                Portfolio portfolio = portfolioDao.getPortfolioByPortfolioId(portfolioId);
                 portfolio.setNonInvestedBalance(portfolio.getNonInvestedBalance().add(convertToAmount));
                 portfolio.setInvestedTotalBalance(portfolio.getInvestedTotalBalance().subtract(convertToAmount));
                 portfolioDao.updatePortfolioBalance(portfolio);
